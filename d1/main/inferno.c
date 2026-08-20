@@ -297,6 +297,13 @@ int main(int argc, char *argv[])
 #define main inner_main
 #endif
 
+#ifdef __ANDROID__
+/* Android has no process entry point of its own: the OpenTouch JNI layer calls
+ * dxx_main() from PortableInit(). SDL_MAIN_HANDLED keeps SDL from renaming this
+ * to SDL_main. */
+#define main dxx_main
+#endif
+
 jmp_buf LeaveEvents;
 #define PROGNAME argv[0]
 

@@ -34,6 +34,9 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "iff.h"
 #include "u_mem.h"
 #include "kconfig.h"
+#ifdef __ANDROID__
+#include "touch_input.h"
+#endif
 #include "gauges.h"
 #include "rbaudio.h"
 #include "render.h"
@@ -1726,6 +1729,10 @@ void kconfig_read_controls(d_event *event, int automap_flag)
     Controls.sideways_thrust_time_overrun = 0;
     Controls.bank_time_overrun = 0;
     Controls.forward_thrust_time_overrun = 0;
+
+#ifdef __ANDROID__
+	dxx_touch_apply_controls();
+#endif
 
 	//----------- Clamp values between -FrameTime and FrameTime
 	if (Controls.pitch_time > FrameTime/2 ) {

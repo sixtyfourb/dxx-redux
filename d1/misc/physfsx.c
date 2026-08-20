@@ -16,6 +16,10 @@
 #endif
 
 #include "physfsx.h"
+#ifdef __ANDROID__
+#include <jni.h>
+#include <SDL_system.h>
+#endif
 #include "args.h"
 #include "object.h"
 #include "newdemo.h"
@@ -36,9 +40,26 @@ void PHYSFSX_init(int argc, char *argv[])
 #ifdef macintosh	// Mac OS 9
 	int bundle = 0;
 #endif
-	
+#ifdef __ANDROID__
+	static char android_user_dir[PATH_MAX + 5];
+	PHYSFS_AndroidInit ainit;
+	jobject jactivity;
+#endif
+
+#ifdef __ANDROID__
+	/* PhysFS treats argv0 as a PHYSFS_AndroidInit* on Android, not a string -
+	 * passing a real argv[0] here dereferences the string as a struct. */
+	jactivity = (jobject) SDL_AndroidGetActivity();
+	ainit.jnienv = SDL_AndroidGetJNIEnv();
+	ainit.context = jactivity;
+	PHYSFS_init((const char *) &ainit);
+	if (jactivity)
+		(*(JNIEnv *) ainit.jnienv)->DeleteLocalRef((JNIEnv *) ainit.jnienv, jactivity);
+#else
 	PHYSFS_init(argv[0]);
+#endif
 	PHYSFS_permitSymbolicLinks(1);
+
 	base_dir = strdup(PHYSFS_getBaseDir());
 	
 #ifdef __unix__
@@ -70,7 +91,18 @@ void PHYSFSX_init(int argc, char *argv[])
 #endif
 	
 #if defined(__unix__)
-# if !(defined(__APPLE__) && defined(__MACH__))
+# if defined(__ANDROID__)
+	/* Config, pilots and saves live under the app's user_files folder, which
+	 * the OpenTouch launcher passes in and always keeps writable - the game
+	 * folder itself may be read-only or SAF-backed. */
+	{
+		const char *user_files = getenv("USER_FILES");
+
+		snprintf(android_user_dir, sizeof(android_user_dir), "%s/%s",
+			user_files ? user_files : ".", DXX_ANDROID_USER_DIR);
+		path = android_user_dir;
+	}
+# elif !(defined(__APPLE__) && defined(__MACH__))
 	path = "~/.d1x-redux/";
 # else
 	path = "~/Library/Preferences/D1X Redux/";
@@ -133,6 +165,15 @@ void PHYSFSX_init(int argc, char *argv[])
 			PHYSFS_addToSearchPath(PHYSFS_getWriteDir(), 0);
 	}
 	
+#ifdef __ANDROID__
+	{
+		const char *game_path = getenv("HOME");
+
+		if (game_path)
+			PHYSFS_addToSearchPath(game_path, 1);
+	}
+#endif
+
 	//tell PHYSFS where hogdir is
 	if (GameArg.SysHogDir)
 		PHYSFS_addToSearchPath(GameArg.SysHogDir,1);

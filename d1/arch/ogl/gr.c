@@ -77,16 +77,21 @@
 #include <OpenGL/glu.h>
 #else
 #ifdef OGLES
+/* SDL2 creates the GLES context itself; only the SDL 1.2 Raspberry Pi build
+ * talks to EGL and X11 directly. */
+#if !SDL_VERSION_ATLEAST(2, 0, 0)
+#define OGLES_MANUAL_EGL 1
 #include <EGL/egl.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <SDL_syswm.h>
+#endif
 #else
 #include <GL/glu.h>
 #endif
 #endif
 
-#ifdef OGLES
+#ifdef OGLES_MANUAL_EGL
 int sdl_video_flags = 0;
 
 #ifdef RPI
@@ -109,7 +114,7 @@ int gl_initialized=0;
 int linedotscale=1; // scalar of glLinewidth and glPointSize - only calculated once when resolution changes
 int sdl_no_modeswitch=0;
 
-#ifdef OGLES
+#ifdef OGLES_MANUAL_EGL
 EGLDisplay eglDisplay=EGL_NO_DISPLAY;
 EGLConfig eglConfig;
 EGLSurface eglSurface=EGL_NO_SURFACE;
@@ -135,7 +140,7 @@ bool TestEGLError(char* pszLocation)
 
 void ogl_swap_buffers_internal(void)
 {
-#ifdef OGLES
+#ifdef OGLES_MANUAL_EGL
 	eglSwapBuffers(eglDisplay, eglSurface);
 #else
 #if SDL_VERSION_ATLEAST(2, 0, 0)
@@ -288,7 +293,7 @@ int rpi_setup_element(int x, int y, Uint32 video_flags, int update)
 
 #endif // RPI
 
-#ifdef OGLES
+#ifdef OGLES_MANUAL_EGL
 void ogles_destroy(void)
 {
 	if( eglDisplay != EGL_NO_DISPLAY ) {
@@ -327,7 +332,7 @@ int ogl_init_window(int x, int y)
 	int use_x,use_y,use_bpp;
 	Uint32 use_flags;
 
-#ifdef OGLES
+#ifdef OGLES_MANUAL_EGL
 	SDL_SysWMinfo info;
 	Window    x11Window = 0;
 	Display*  x11Display = 0;
@@ -370,6 +375,14 @@ int ogl_init_window(int x, int y)
 	}
 
 	if (!sdl_window) {
+#ifdef OGLES
+		/* Descent's renderer is fixed-function, so ask SDL for a GLES 1.x
+		 * context rather than the GLES 2 default. */
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
+#endif
 		sdl_window = SDL_CreateWindow(DESCENT_VERSION, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, use_x, use_y,
 			SDL_WINDOW_OPENGL | (use_flags & SDL_WINDOW_FULLSCREEN ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
 		if (!sdl_window)
@@ -385,7 +398,9 @@ int ogl_init_window(int x, int y)
 	if (use_fbo) {
 		SDL_SetWindowFullscreen(sdl_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
 	} else {
+#ifndef __ANDROID__
 		SDL_SetWindowSize(sdl_window, use_x, use_y);
+#endif
 		SDL_SetWindowFullscreen(sdl_window, (use_flags & SDL_WINDOW_FULLSCREEN) ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
 		SDL_SetWindowBordered(sdl_window, (use_flags & SDL_WINDOW_BORDERLESS) ? SDL_FALSE : SDL_TRUE);
 	}
@@ -394,7 +409,9 @@ int ogl_init_window(int x, int y)
 		sdl_gl_context = SDL_GL_CreateContext(sdl_window);
 		if (!sdl_gl_context)
 			Error("Could not create OpenGL context: %s\n", SDL_GetError());
+#ifndef OGLES
 		glewInit();
+#endif
 	}
 	if (use_fbo)
 		ogl_fbo_setup(sdl_window, use_x, use_y);
@@ -435,7 +452,7 @@ int ogl_init_window(int x, int y)
 	}
 #endif
 
-#ifdef OGLES
+#ifdef OGLES_MANUAL_EGL
 #ifndef RPI
 	// NOTE: on the RPi, the EGL stuff is not connected to the X11 window,
 	//       so there is no need to destroy and recreate this
@@ -521,7 +538,9 @@ int ogl_init_window(int x, int y)
 		con_printf(CON_DEBUG, "EGL: made context current\n");
 	}
 #endif
+#ifndef OGLES
 	glewInit();
+#endif
 #ifdef OGL_MERGE
 	ogl_init_prog();
 #endif
@@ -809,6 +828,28 @@ int gr_set_mode(u_int32_t mode)
 		Game_screen_mode=mode=SM(w,h);
 	}
 
+#ifdef __ANDROID__
+	/* Always render at the window's own size: the virtual-resolution FBO is
+	 * unavailable on GLES 1.x, so any other mode would draw into a corner. */
+	{
+		SDL_DisplayMode dm;
+		int real_w = 0, real_h = 0;
+
+		if (sdl_window)
+			SDL_GetWindowSize(sdl_window, &real_w, &real_h);
+		else if (SDL_GetCurrentDisplayMode(0, &dm) == 0) {
+			real_w = dm.w;
+			real_h = dm.h;
+		}
+
+		if (real_w > 0 && real_h > 0) {
+			w = real_w;
+			h = real_h;
+			Game_screen_mode = mode = SM(w, h);
+		}
+	}
+#endif
+
 	gr_bm_data=(char *)grd_curscreen->sc_canvas.cv_bitmap.bm_data;//since we use realloc, we want to keep this pointer around.
 	memset( grd_curscreen, 0, sizeof(grs_screen));
 	grd_curscreen->sc_mode = mode;
@@ -946,12 +987,16 @@ int gr_init(int mode)
 	ogl_init_load_library();
 #endif
 
+#ifdef __ANDROID__
+	sdl_video_flags |= SDL_WINDOW_FULLSCREEN;
+#else
 	if (!GameCfg.WindowMode && !GameArg.SysWindow)
 		sdl_video_flags|=
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 			SDL_WINDOW_FULLSCREEN;
 #else
 			SDL_FULLSCREEN;
+#endif
 #endif
 
 	if (GameArg.SysNoBorders)
@@ -1024,7 +1069,7 @@ void gr_close()
 		OpenGL_LoadLibrary(false);
 #endif
 
-#ifdef OGLES
+#ifdef OGLES_MANUAL_EGL
 	ogles_destroy();
 #ifdef RPI
 	con_printf(CON_DEBUG, "RPi: cleanuing up\n");

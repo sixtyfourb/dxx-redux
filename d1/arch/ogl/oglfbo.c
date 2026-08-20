@@ -22,6 +22,20 @@
 */
 
 #include <SDL.h>
+#ifdef OGLES
+
+/* GLES 1.x has no glBlitFramebuffer, so virtual resolution is unavailable and
+ * the game renders straight to the window at its native size. */
+#include "oglfbo.h"
+
+SDL_bool ogl_fbo_setup(SDL_Window *w, const int x, const int y) { return SDL_FALSE; }
+void ogl_fbo_swap(SDL_Window *w) { SDL_GL_SwapWindow(w); }
+int ogl_fbo_is_active(void) { return 0; }
+void ogl_fbo_release(void) { }
+void ogl_fbo_scale_position(SDL_Window *w, int *x, int *y) { }
+
+#else
+
 #include <GL/glew.h>
 #include "oglfbo.h"
 
@@ -279,3 +293,5 @@ void ogl_fbo_scale_position(SDL_Window *window, int *x, int *y)
     *x = SDL_max(SDL_min(adjusted_x, OpenGLLogicalScalingWidth), 0);
     *y = SDL_max(SDL_min(adjusted_y, OpenGLLogicalScalingHeight), 0);
 }
+
+#endif /* !OGLES */

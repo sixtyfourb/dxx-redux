@@ -11,7 +11,9 @@
 #include <stddef.h>
 #endif
 
+#ifndef OGLES
 #include <GL/glew.h>
+#endif
 #ifdef _WIN32
 #include "loadgl.h"
 int ogl_init_load_library(void);

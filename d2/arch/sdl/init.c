@@ -38,6 +38,13 @@ void arch_init(void)
 {
 	int t;
 
+#ifdef __ANDROID__
+	/* The OpenTouch layer owns the touchscreen and injects the mouse events it
+	 * wants; SDL's own touch-to-mouse conversion would double up on every
+	 * stick drag. */
+	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#endif
+
 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
 		Error("SDL library initialisation failed: %s.",SDL_GetError());
 
