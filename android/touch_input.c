@@ -186,9 +186,15 @@ void dxx_touch_apply_controls(void)
 	Controls.heading_time += (fix) (touch.heading * AXIS_MAX_ROT(ft));
 	Controls.bank_time += (fix) (touch.bank * AXIS_MAX_ROT(ft));
 
-	TLOG("apply: rel p=%f h=%f | abs p=%f h=%f | ft=%d pitch_time=%d heading_time=%d",
+	/* Also log what the engine's other input sources contribute: a value here
+	 * that our own axes cannot account for means something else is driving the
+	 * ship - a held key, the mouse, or a joystick axis. */
+	TLOG("apply: rel p=%f h=%f | abs p=%f h=%f | ft=%d pitch_time=%d heading_time=%d"
+	     " | mouse %d,%d,%d | joy %d,%d",
 	     touch.pitch_rel, touch.heading_rel, touch.pitch, touch.heading,
-	     (int) ft, (int) Controls.pitch_time, (int) Controls.heading_time);
+	     (int) ft, (int) Controls.pitch_time, (int) Controls.heading_time,
+	     (int) Controls.mouse_axis[0], (int) Controls.mouse_axis[1], (int) Controls.mouse_axis[2],
+	     (int) Controls.joy_axis[0], (int) Controls.joy_axis[1]);
 
 	Controls.pitch_time += (fix) (touch.pitch_rel * REL_GAIN * ft);
 	Controls.heading_time += (fix) (touch.heading_rel * REL_GAIN * ft);
