@@ -176,7 +176,10 @@ void PHYSFSX_init(int argc, char *argv[])
 
 	//tell PHYSFS where hogdir is
 	if (GameArg.SysHogDir)
-		PHYSFS_addToSearchPath(GameArg.SysHogDir,1);
+	{
+		if (!PHYSFS_addToSearchPath(GameArg.SysHogDir,1))
+			con_printf(CON_URGENT, "hogdir %s: %s\n", GameArg.SysHogDir, PHYSFS_getLastError());
+	}
 #if defined(__unix__)
 	else if (!GameArg.SysNoHogDir)
 		PHYSFS_addToSearchPath(SHAREPATH, 1);
