@@ -4346,7 +4346,11 @@ void netgame_set_defaults(void)
 	Netgame.NewSpawnAlgorithm = 0;
 
 #ifdef USE_TRACKER
-	Netgame.Tracker = 1;
+	// Off by default. Hosting a game otherwise announced it to a public tracker
+	// on the internet, which is not what someone starting a game on a phone next
+	// to another phone is asking for. "Track this game" in the setup screen still
+	// turns it on, and the choice is remembered per netgame profile.
+	Netgame.Tracker = 0;
 #endif
 }
 
