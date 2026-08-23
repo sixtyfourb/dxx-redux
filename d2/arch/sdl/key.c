@@ -589,7 +589,15 @@ void key_init()
 
 	Installed=1;
 #if SDL_VERSION_ATLEAST(2, 0, 0)
+#ifndef __ANDROID__
 	SDL_StartTextInput();
+#endif
+	/* Not on Android: asking for text input there is asking for the on-screen
+	 * keyboard, and this runs once at startup, so the keyboard sat over the game
+	 * for the whole session with nothing to dismiss it - key_close is the only
+	 * thing that ever turned it off. Characters do not arrive that way on this
+	 * platform in any case; the touch layer has its own keyboard and injects key
+	 * events directly. */
 #else
 	SDL_EnableUNICODE(1);
 #endif
