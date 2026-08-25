@@ -382,7 +382,12 @@ void add_missions_to_list(mle *mission_list, char *path, char *rel_path, int ana
 			add_missions_to_list(mission_list, path, rel_path, anarchy_mode);
 			*(strrchr(path, '/')) = 0;
 		}
-		else if ((ext = strrchr(*i, '.')) && (!d_strnicmp(ext, ".msn", 4) || !d_strnicmp(ext, ".mn2", 4)))
+		// Descent 1 missions only. A .mn2 is a Descent 2 mission - its levels are
+		// .rl2, which this engine has no reader for - so listing one only offers
+		// the player something that answers "Error loading mission file" when
+		// picked. Rebirth guards the same line with DXX_BUILD_DESCENT == 2; the
+		// Descent 2 build here keeps both, since it can play Descent 1 missions.
+		else if ((ext = strrchr(*i, '.')) && !d_strnicmp(ext, ".msn", 4))
 			if (read_mission_file(&mission_list[num_missions], rel_path, ML_MISSIONDIR))
 			{
 				if (anarchy_mode || !mission_list[num_missions].anarchy_only_flag)
