@@ -19,6 +19,16 @@ extern "C" {
 #include "texmap.h"
 }
 
+#ifdef OGLES
+// GLES 1.1 has mipmap generation, under the name the extension gave it. Nothing
+// else in this file is outside GLES 1.x - buffer objects included, which are
+// core in 1.1 - so this is all that stood between the hires models and Android.
+// It goes after the block above, which is where <GLES/gl.h> arrives: glext.h has
+// no includes of its own and will not compile without GLenum already declared.
+#include <GLES/glext.h>
+#define glGenerateMipmap glGenerateMipmapOES
+#endif
+
 struct CGameFolders gameFolders;
 struct CGameStates gameStates;
 

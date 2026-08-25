@@ -186,6 +186,11 @@ void PHYSFSX_init(int argc, char *argv[])
 #endif
 	
 	PHYSFSX_addRelToSearchPath("data", 1);	// 'Data' subdirectory
+	// The hires models name no folder - xmodelnames.h lists "pyrogl.ase" and
+	// friends bare, and xmodel's CFile::Open ignores the directory it is given
+	// and asks PhysFS - so the folder they live in has to be searched. D2X-XL
+	// keeps them in "models" too, so one copy serves both engines.
+	PHYSFSX_addRelToSearchPath("models", 1);
 	
 	// For Macintosh, search the same path as the .app.
 #if defined(__APPLE__) && defined(__MACH__)
