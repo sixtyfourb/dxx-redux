@@ -15,6 +15,7 @@
 #include <ApplicationServices/ApplicationServices.h>
 #endif
 
+#include <ctype.h>
 #include "physfsx.h"
 #ifdef __ANDROID__
 #include <jni.h>
@@ -526,6 +527,29 @@ PHYSFS_file *PHYSFSX_openWriteBuffered(const char *filename)
  * 1) archives from Sharepath/Data to extend/replace builtin game content
  * 2) archived demos
  */
+/*
+ * Whether an add-on archive belongs to the other game.
+ *
+ * Both games are played out of one folder in this port, which upstream never
+ * has to deal with - there, each game has a directory of its own. The
+ * soundtrack packs are named for their game but the files *inside* them are
+ * not: d1xr-opl3-music.dxa and d2xr-opl3-music.dxa both carry descent.sng,
+ * descent.ogg, briefing.ogg and game01..game04.ogg. Mounting both therefore
+ * leaves one game playing the other's music, and since each archive is
+ * prepended to the search path, whichever was added last silently wins.
+ */
+static int PHYSFSX_isOtherGamesArchive(const char *filename)
+{
+	static const char other_prefix[] = "d2xr-";
+	int i;
+
+	for (i = 0; other_prefix[i]; i++)
+		if (tolower((unsigned char) filename[i]) != other_prefix[i])
+			return 0;
+
+	return 1;
+}
+
 void PHYSFSX_addArchiveContent()
 {
 	char **list = NULL;
@@ -539,6 +563,13 @@ void PHYSFSX_addArchiveContent()
 	// if found, add them...
 	for (i = 0; list[i] != NULL; i++)
 	{
+		// Descent 2's add-ons are not ours to mount.
+		if (PHYSFSX_isOtherGamesArchive(list[i]))
+		{
+			con_printf(CON_DEBUG, "PHYSFS: Skipping %s, it belongs to the other game\n", list[i]);
+			continue;
+		}
+
 		MALLOC(file[0], char, PATH_MAX);
 		MALLOC(file[1], char, PATH_MAX);
 		snprintf(file[0], sizeof(char)*PATH_MAX, "%s", list[i]);
