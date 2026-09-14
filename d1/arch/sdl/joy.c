@@ -5,6 +5,7 @@
  */
 
 #include <string.h>   // for memset
+#include <stdlib.h>   // for abs
 
 #include "joy.h"
 #include "dxxerror.h"
@@ -55,6 +56,10 @@ static struct {
 	int n_hats;
 	int hat_map[MAX_HATS_PER_JOYSTICK];  //Note: Descent expects hats to be buttons, so these are indices into Joystick.buttons
 	int axis_map[MAX_AXES_PER_JOYSTICK];
+	// Where each axis sits when untouched, sampled at open. Sticks rest at 0,
+	// but an XInput trigger rests at the negative extreme - so a deadzone
+	// measured from zero reads it as permanently held.
+	int axis_rest[MAX_AXES_PER_JOYSTICK];
 	int button_map[MAX_BUTTONS_PER_JOYSTICK];
 	int axis_button_map[MAX_AXES_PER_JOYSTICK];
 } SDL_Joysticks[MAX_JOYSTICKS];
@@ -132,6 +137,15 @@ int joy_axis_handler(SDL_JoyAxisEvent *jae)
 	return 1;
 }
 
+// Deflection from rest can reach twice the nominal range on an axis that rests
+// at an extreme, so keep it inside what the rest of the code expects.
+static int clamp_axis(int value)
+{
+	if (value >  127) return  127;
+	if (value < -128) return -128;
+	return value;
+}
+
 int joy_apply_deadzone(int value, int deadzone)
 {
 	if (value > deadzone)
@@ -166,8 +180,13 @@ int joy_axisbutton_handler(SDL_JoyAxisEvent *jae)
 	// We could add another deadzone slider called "axis button deadzone".
 	// I think it's safe to assume a 30% deadzone on analog button presses for now.
 	int deadzone = 38;
-	int prev_value = joy_apply_deadzone(Joystick.axis_value[jae->axis], deadzone);
-	int new_value = joy_apply_deadzone(jae->value/256, deadzone);
+	// Measured from the axis's own rest position. An XInput trigger idles at
+	// -32767, which is well past any deadzone taken from zero - so without
+	// this every trigger reports a button held down from the moment the game
+	// starts, and in a menu that jams navigation completely.
+	int rest = SDL_Joysticks[jae->which].axis_rest[jae->axis];
+	int prev_value = joy_apply_deadzone(clamp_axis(Joystick.axis_value[jae->axis] - rest), deadzone);
+	int new_value = joy_apply_deadzone(clamp_axis(jae->value/256 - rest), deadzone);
 
 	if (prev_value <= 0 && new_value >= 0) // positive pressed
 	{
@@ -249,8 +268,18 @@ void joy_init()
 			con_printf(CON_NORMAL, "sdl-joystick: %d buttons\n", SDL_Joysticks[num_joysticks].n_buttons);
 			con_printf(CON_NORMAL, "sdl-joystick: %d hats\n", SDL_Joysticks[num_joysticks].n_hats);
 
+			// Sample the resting position before anything is touched, so the
+			// axis-to-button conversion below can measure deflection from
+			// where an axis actually sits rather than from zero.
+			SDL_JoystickUpdate();
 			for (j=0; j < SDL_Joysticks[num_joysticks].n_axes; j++)
 			{
+				int rest = SDL_JoystickGetAxis(SDL_Joysticks[num_joysticks].handle, j) / 256;
+
+				SDL_Joysticks[num_joysticks].axis_rest[j] = rest;
+				if (abs(rest) > 64)
+					con_printf(CON_NORMAL, "sdl-joystick: axis %d rests at %d - treating as a trigger\n", j, rest);
+
 				sprintf(temp, "J%d A%d", i + 1, j + 1);
 				joyaxis_text[Joystick.n_axes] = d_strdup(temp);
 				SDL_Joysticks[num_joysticks].axis_map[j] = Joystick.n_axes++;
