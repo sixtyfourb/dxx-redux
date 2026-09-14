@@ -179,7 +179,7 @@ int call_default_handler(d_event *event)
 	return 0;
 }
 
-void event_send(d_event *event)
+int event_send(d_event *event)
 {
 	window *wind;
 	int handled = 0;
@@ -197,6 +197,8 @@ void event_send(d_event *event)
 	
 	if (!handled)
 		call_default_handler(event);
+
+	return handled;
 }
 
 // Process the first event in queue, sending to the appropriate handler

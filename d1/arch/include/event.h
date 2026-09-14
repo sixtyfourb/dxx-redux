@@ -56,7 +56,10 @@ void set_default_handler(int (*handler)(d_event *event));
 int call_default_handler(d_event *event);
 
 // Send an event to the front window as first priority, then to the windows behind if it's not modal (editor), then the default handler
-void event_send(d_event *event);
+// Returns 1 if a window handled the event, 0 if it fell through to the default
+// handler. The joystick code uses this to tell a screen that ignores the pad
+// from one that acted on it.
+int event_send(d_event *event);
 
 // Sends input, idle and draw events to event handlers
 void event_process();

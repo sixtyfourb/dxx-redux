@@ -41,7 +41,6 @@ COPYRIGHT 1993-1998 PARALLAX SOFTWARE CORPORATION.  ALL RIGHTS RESERVED.
 #include "pcx.h"
 #include "u_mem.h"
 #include "mouse.h"
-#include "joy.h"
 #include "digi.h"
 #include "multi.h"
 #include "endlevel.h"

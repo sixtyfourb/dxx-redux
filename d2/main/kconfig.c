@@ -866,8 +866,20 @@ int kconfig_handler(window *wind, d_event *event, kc_menu *menu)
 			break;
 
 		case EVENT_JOYSTICK_BUTTON_DOWN:
-			if (menu->changing && menu->items[menu->citem].type == BT_JOY_BUTTON) kc_change_joybutton(menu, event, &menu->items[menu->citem]);
-			break;
+			if (menu->changing)
+			{
+				// Capturing a binding: swallow the button whatever the item is,
+				// so that pressing one while a key item is armed cannot leak out
+				// and be bound as a keypress instead.
+				if (menu->items[menu->citem].type == BT_JOY_BUTTON)
+					kc_change_joybutton(menu, event, &menu->items[menu->citem]);
+				break;
+			}
+			// Not capturing, so do not claim it. This handler returns 1 for
+			// everything it reaches, which told the joystick code the pad had
+			// been dealt with and suppressed the keyboard equivalent - leaving
+			// no way to move through this screen or leave it without a keyboard.
+			return 0;
 
 		case EVENT_JOYSTICK_MOVED:
 			if (menu->changing && menu->items[menu->citem].type == BT_JOY_AXIS) kc_change_joyaxis(menu, event, &menu->items[menu->citem]);

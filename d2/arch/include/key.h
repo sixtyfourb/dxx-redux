@@ -44,6 +44,16 @@ extern fix64 keyd_time_when_last_pressed;
 // Stores Unicode values registered in one event_loop call
 extern unsigned char unicode_frame_buffer[KEY_BUFFER_SIZE];
 
+// Was private to key.c. It is here so that code which needs to act on a key it
+// synthesised - the pad standing in for a keyboard - can build one on the stack
+// and hand it straight to a handler, rather than pushing it back through
+// event_send() and re-entering the event loop from inside a handler.
+typedef struct d_event_keycommand
+{
+	event_type	type;	// EVENT_KEY_COMMAND/RELEASE
+	int			keycode;
+} d_event_keycommand;
+
 extern void key_flush();    // Clears the 256 char buffer
 extern int event_key_get(d_event *event);	// Get the keycode from the EVENT_KEY_COMMAND event
 extern int event_key_get_raw(d_event *event);	// same as above but without mod states

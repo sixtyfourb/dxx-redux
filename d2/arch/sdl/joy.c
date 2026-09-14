@@ -5,8 +5,10 @@
  */
 
 #include <string.h>   // for memset
+#include <stdlib.h>   // for abs
 
 #include "joy.h"
+#include "key.h"       // for the KEY_* codes joy_menu_key returns
 #include "dxxerror.h"
 #include "timer.h"
 #include "console.h"
@@ -14,6 +16,8 @@
 #include "text.h"
 #include "u_mem.h"
 #include "playsave.h"
+#include "game.h"      // Game_wind: are we flying, or in a menu?
+#include "window.h"
 #include "kconfig.h"
 
 int num_joysticks = 0;
@@ -53,30 +57,96 @@ static struct {
 	int n_hats;
 	int hat_map[MAX_HATS_PER_JOYSTICK];  //Note: Descent expects hats to be buttons, so these are indices into Joystick.buttons
 	int axis_map[MAX_AXES_PER_JOYSTICK];
+	// Where each axis sits when untouched, sampled at open. Sticks rest at 0,
+	// but an XInput trigger rests at the negative extreme - so a deadzone
+	// measured from zero reads it as permanently held.
+	int axis_rest[MAX_AXES_PER_JOYSTICK];
 	int button_map[MAX_BUTTONS_PER_JOYSTICK];
 	int axis_button_map[MAX_AXES_PER_JOYSTICK];
 } SDL_Joysticks[MAX_JOYSTICKS];
 
+
+// Start on an XInput-shaped pad, which is what these handhelds present. Only
+// used as a fallback, so a player who binds it to something keeps that instead.
+#define JOY_BUTTON_START 7
+
+/*
+ * True while the cockpit has the focus. Opening the in-game menu puts a window
+ * in front of Game_wind, so this correctly says no once a menu is up and the
+ * full navigation set is wanted again.
+ */
+static int joy_flying(void)
+{
+	return Game_wind != NULL && window_get_front() == Game_wind;
+}
+
+/*
+ * What a button means in flight. Almost nothing: the pad is for flying, and the
+ * game returns unhandled for any button the player has not bound, which would
+ * otherwise let the menu translation fire and drop them out of the level.
+ */
+static int joy_game_key(int button)
+{
+	if (num_joysticks > 0 && SDL_Joysticks[0].n_buttons > JOY_BUTTON_START
+	    && button == SDL_Joysticks[0].button_map[JOY_BUTTON_START])
+		return KEY_ESC;
+
+	return 0;
+}
+
+/*
+ * Send a pad button, and fall back to the keyboard if nothing wanted it.
+ *
+ * Most of Descent's full-screen states - the briefing, the credits, the score
+ * table, the menus - handle EVENT_KEY_COMMAND and EVENT_MOUSE_* and nothing
+ * else, so on a handheld with no keyboard there is no way out of them. The ones
+ * that do read the pad (the game itself, the automap, the controls screen)
+ * return handled and are unaffected, so this cannot double up on them.
+ */
+static int joy_send_button(int button, event_type type)
+{
+	d_event_joystickbutton event;
+	int handled;
+
+	event.type = type;
+	event.button = button;
+	con_printf(CON_DEBUG, "Sending event %s, button %d\n",
+		(type == EVENT_JOYSTICK_BUTTON_DOWN) ? "EVENT_JOYSTICK_BUTTON_DOWN" : "EVENT_JOYSTICK_BUTTON_UP", button);
+	handled = event_send((d_event *)&event);
+
+	if (!handled && type == EVENT_JOYSTICK_BUTTON_DOWN)
+	{
+		int key = joy_flying() ? joy_game_key(button) : joy_menu_key(button);
+
+		if (key)
+		{
+			d_event_keycommand keyevent;
+
+			keyevent.type = EVENT_KEY_COMMAND;
+			keyevent.keycode = key;
+			con_printf(CON_DEBUG, "Nobody took button %d; offering key %d\n", button, key);
+			event_send((d_event *)&keyevent);
+		}
+	}
+
+	return handled;
+}
+
 void joy_button_handler(SDL_JoyButtonEvent *jbe)
 {
 	int button;
-	d_event_joystickbutton event;
 
 	button = SDL_Joysticks[jbe->which].button_map[jbe->button];
 
 	Joystick.button_state[button] = jbe->state;
 
-	event.type = (jbe->type == SDL_JOYBUTTONDOWN) ? EVENT_JOYSTICK_BUTTON_DOWN : EVENT_JOYSTICK_BUTTON_UP;
-	event.button = button;
-	con_printf(CON_DEBUG, "Sending event %s, button %d\n", (jbe->type == SDL_JOYBUTTONDOWN) ? "EVENT_JOYSTICK_BUTTON_DOWN" : "EVENT_JOYSTICK_JOYSTICK_UP", event.button);
-	event_send((d_event *)&event);
+	joy_send_button(button, (jbe->type == SDL_JOYBUTTONDOWN) ? EVENT_JOYSTICK_BUTTON_DOWN : EVENT_JOYSTICK_BUTTON_UP);
 }
 
 void joy_hat_handler(SDL_JoyHatEvent *jhe)
 {
 	int hat = SDL_Joysticks[jhe->which].hat_map[jhe->hat];
 	int hbi;
-	d_event_joystickbutton event;
 
 	//Save last state of the hat-button
 	Joystick.button_last_state[hat  ] = Joystick.button_state[hat  ];
@@ -94,19 +164,9 @@ void joy_hat_handler(SDL_JoyHatEvent *jhe)
 	for(hbi=0;hbi<4;hbi++)
 	{
 		if( !Joystick.button_last_state[hat+hbi] && Joystick.button_state[hat+hbi]) //last_state up, current state down
-		{
-			event.type = EVENT_JOYSTICK_BUTTON_DOWN;
-			event.button = hat+hbi;
-			con_printf(CON_DEBUG, "Sending event EVENT_JOYSTICK_BUTTON_DOWN, button %d\n", event.button);
-			event_send((d_event *)&event);
-		}
+			joy_send_button(hat+hbi, EVENT_JOYSTICK_BUTTON_DOWN);
 		else if(Joystick.button_last_state[hat+hbi] && !Joystick.button_state[hat+hbi])  //last_state down, current state up
-		{
-			event.type = EVENT_JOYSTICK_BUTTON_UP;
-			event.button = hat+hbi;
-			con_printf(CON_DEBUG, "Sending event EVENT_JOYSTICK_BUTTON_UP, button %d\n", event.button);
-			event_send((d_event *)&event);
-		}
+			joy_send_button(hat+hbi, EVENT_JOYSTICK_BUTTON_UP);
 	}
 }
 
@@ -130,6 +190,15 @@ int joy_axis_handler(SDL_JoyAxisEvent *jae)
 	return 1;
 }
 
+// Deflection from rest can reach twice the nominal range on an axis that rests
+// at an extreme, so keep it inside what the rest of the code expects.
+static int clamp_axis(int value)
+{
+	if (value >  127) return  127;
+	if (value < -128) return -128;
+	return value;
+}
+
 int joy_apply_deadzone(int value, int deadzone)
 {
 	if (value > deadzone)
@@ -142,14 +211,8 @@ int joy_apply_deadzone(int value, int deadzone)
 
 static int send_axis_button_event(unsigned button, event_type e)
 {
-	d_event_joystickbutton event;
-
 	Joystick.button_state[button] = (e == EVENT_JOYSTICK_BUTTON_UP) ? 0 : 1;
-	event.type = e;
-	event.button = button;
-	con_printf(CON_DEBUG, "Sending event %sEVENT_JOYSTICK_BUTTON_DOWN, button %d\n",
-		(e == EVENT_JOYSTICK_BUTTON_UP ? "EVENT_JOYSTICK_BUTTON_UP" : "EVENT_JOYSTICK_BUTTON_DOWN"), button);
-	event_send((d_event *)&event);
+	joy_send_button(button, e);
 	return 1;
 }
 
@@ -164,8 +227,13 @@ int joy_axisbutton_handler(SDL_JoyAxisEvent *jae)
 	// We could add another deadzone slider called "axis button deadzone".
 	// I think it's safe to assume a 30% deadzone on analog button presses for now.
 	int deadzone = 38;
-	int prev_value = joy_apply_deadzone(Joystick.axis_value[jae->axis], deadzone);
-	int new_value = joy_apply_deadzone(jae->value/256, deadzone);
+	// Measured from the axis's own rest position. An XInput trigger idles at
+	// -32767, which is well past any deadzone taken from zero - so without
+	// this every trigger reports a button held down from the moment the game
+	// starts, and in a menu that jams navigation completely.
+	int rest = SDL_Joysticks[jae->which].axis_rest[jae->axis];
+	int prev_value = joy_apply_deadzone(clamp_axis(Joystick.axis_value[jae->axis] - rest), deadzone);
+	int new_value = joy_apply_deadzone(clamp_axis(jae->value/256 - rest), deadzone);
 
 	if (prev_value <= 0 && new_value >= 0) // positive pressed
 	{
@@ -185,6 +253,60 @@ int joy_axisbutton_handler(SDL_JoyAxisEvent *jae)
 	return sent;
 }
 
+
+/* ----------------------------------------------- */
+
+int joy_menu_key(int button)
+{
+	int j;
+
+	if (button < 0)
+		return 0;
+
+	// Only the first pad drives menus. A second one is for a second player,
+	// and having it move the first player's menu would be worse than useless.
+	if (num_joysticks < 1)
+		return 0;
+
+	// The hat, which joy_init expands into four consecutive buttons in the
+	// order up, right, down, left.
+	for (j = 0; j < SDL_Joysticks[0].n_hats; j++)
+	{
+		int hat = SDL_Joysticks[0].hat_map[j];
+
+		if (button == hat)     return KEY_UP;
+		if (button == hat + 1) return KEY_RIGHT;
+		if (button == hat + 2) return KEY_DOWN;
+		if (button == hat + 3) return KEY_LEFT;
+	}
+
+	// The first stick, through the synthetic buttons joy_axisbutton_handler
+	// makes: each axis becomes two buttons, negative then positive. Axis 0 is
+	// left/right and axis 1 is up/down on every pad this is likely to meet.
+	if (SDL_Joysticks[0].n_axes > 1)
+	{
+		int x = SDL_Joysticks[0].axis_button_map[0];
+		int y = SDL_Joysticks[0].axis_button_map[1];
+
+		// joy_init labels these "-A" then "+A", but joy_axisbutton_handler
+		// sends the base index for POSITIVE deflection and base+1 for
+		// negative. Follow what is actually sent: right and down are the
+		// positive ends of a stick, so they take the base.
+		if (button == x)     return KEY_RIGHT;
+		if (button == x + 1) return KEY_LEFT;
+		if (button == y)     return KEY_DOWN;
+		if (button == y + 1) return KEY_UP;
+	}
+
+	// Buttons 0 and 1 are the south and east face buttons on anything
+	// XInput-shaped, which is what "confirm" and "cancel" mean to a player.
+	if (SDL_Joysticks[0].n_buttons > 0 && button == SDL_Joysticks[0].button_map[0])
+		return KEY_ENTER;
+	if (SDL_Joysticks[0].n_buttons > 1 && button == SDL_Joysticks[0].button_map[1])
+		return KEY_ESC;
+
+	return 0;
+}
 
 /* ----------------------------------------------- */
 
@@ -247,8 +369,18 @@ void joy_init()
 			con_printf(CON_NORMAL, "sdl-joystick: %d buttons\n", SDL_Joysticks[num_joysticks].n_buttons);
 			con_printf(CON_NORMAL, "sdl-joystick: %d hats\n", SDL_Joysticks[num_joysticks].n_hats);
 
+			// Sample the resting position before anything is touched, so the
+			// axis-to-button conversion below can measure deflection from
+			// where an axis actually sits rather than from zero.
+			SDL_JoystickUpdate();
 			for (j=0; j < SDL_Joysticks[num_joysticks].n_axes; j++)
 			{
+				int rest = SDL_JoystickGetAxis(SDL_Joysticks[num_joysticks].handle, j) / 256;
+
+				SDL_Joysticks[num_joysticks].axis_rest[j] = rest;
+				if (abs(rest) > 64)
+					con_printf(CON_NORMAL, "sdl-joystick: axis %d rests at %d - treating as a trigger\n", j, rest);
+
 				sprintf(temp, "J%d A%d", i + 1, j + 1);
 				joyaxis_text[Joystick.n_axes] = d_strdup(temp);
 				SDL_Joysticks[num_joysticks].axis_map[j] = Joystick.n_axes++;

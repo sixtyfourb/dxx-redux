@@ -33,4 +33,16 @@ extern int joy_axisbutton_handler(SDL_JoyAxisEvent *jae);
 
 extern int joy_apply_deadzone(int value, int deadzone);
 
+// Menu navigation from a gamepad.
+//
+// Descent's menus read the keyboard and the mouse and nothing else, so on a
+// handheld with no keyboard there is no way to move a selection or back out of
+// a screen. This maps a joystick button - including the synthetic buttons a hat
+// and the first stick's axes produce - onto the key the menus already
+// understand, so the menu code needs to learn nothing about joysticks.
+//
+// Returns 0 for a button with no menu meaning, which leaves it free for the
+// player to bind to a flight action as before.
+extern int joy_menu_key(int button);
+
 #endif // _JOY_H

@@ -439,11 +439,8 @@ const key_props key_properties[256] = {
 { "W95",    255,    SDLK_WORLD_95      }, // 255
 };
 
-typedef struct d_event_keycommand
-{
-	event_type	type;	// EVENT_KEY_COMMAND/RELEASE
-	int			keycode;
-} d_event_keycommand;
+/* d_event_keycommand moved to key.h - the pad builds one to stand in for a
+   keypress on screens that only read the keyboard. */
 
 int key_ismodlck(int keycode)
 {
