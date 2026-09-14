@@ -804,36 +804,35 @@ int do_new_game_menu()
 	if (player_highest_level > 1) {
 		newmenu_item m[4];
 		char info_text[80];
-		char num_text[10];
 		int choice;
-		int n_items;
-		int valid = 0;
 
-		while (!valid)
-		{
-			sprintf(info_text,"%s %d",TXT_START_ANY_LEVEL, player_highest_level);
+		sprintf(info_text,"%s %d",TXT_START_ANY_LEVEL, player_highest_level);
 
-			m[0].type=NM_TYPE_TEXT; m[0].text = info_text;
-			m[1].type=NM_TYPE_INPUT; m[1].text_len = 10; m[1].text = num_text;
-			n_items = 2;
+		// A counter rather than a typed number. Left and right adjust it, which
+		// the arrow keys and - through joy_menu_key - a gamepad's hat and stick
+		// already produce, so starting a mission part way through no longer
+		// needs a keyboard.
+		//
+		// NM_TYPE_NUMBER rather than NM_TYPE_SLIDER because the slider draws one
+		// bar segment per step into a buffer it shares with the label, and shows
+		// no number at all. That is fine for a sensitivity setting with sixteen
+		// steps and wrong for a mission like Descent: Full Strike, which has 71
+		// levels.
+		m[0].type = NM_TYPE_TEXT;   m[0].text = info_text;
+		m[1].type = NM_TYPE_NUMBER; m[1].text = "Level";
+		m[1].value = 1;
+		m[1].min_value = 1;
+		m[1].max_value = player_highest_level;
 
-			strcpy(num_text,"1");
+		choice = newmenu_do( NULL, TXT_SELECT_START_LEV, 2, m, NULL, NULL );
 
-			choice = newmenu_do( NULL, TXT_SELECT_START_LEV, n_items, m, NULL, NULL );
+		if (choice == -1)
+			return 0;
 
-			if (choice==-1 || m[1].text[0]==0)
-				return 0;
-
-			new_level_num = atoi(m[1].text);
-
-			if (!(new_level_num>0 && new_level_num<=player_highest_level)) {
-				m[0].text = TXT_ENTER_TO_CONT;
-				nm_messagebox( NULL, 1, TXT_OK, TXT_INVALID_LEVEL);
-				valid = 0;
-			}
-			else
-				valid = 1;
-		}
+		// The counter is clamped to min_value..max_value as it is drawn, so it
+		// cannot produce a level that does not exist - which is what the old
+		// validate-and-ask-again loop was for.
+		new_level_num = m[1].value;
 	}
 
 	Difficulty_level = PlayerCfg.DefaultDifficulty;

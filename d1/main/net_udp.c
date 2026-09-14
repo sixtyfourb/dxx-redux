@@ -4183,21 +4183,13 @@ int net_udp_game_param_handler( newmenu *menu, d_event *event, param_opt *opt )
 			
 			if (citem == opt->level)
 			{
-				char *slevel = menus[opt->level].text;
+				// Zero is not a level: it separates the secret levels, which
+				// count down from -1, from the ordinary ones counting up from 1.
+				// Step over it in whichever direction the player was moving.
+				if (menus[opt->level].value == 0)
+					menus[opt->level].value = (Netgame.levelnum < 0) ? 1 : -1;
 
-				Netgame.levelnum = atoi(slevel);
-				
-				if (!d_strnicmp(slevel, "s", 1))
-					Netgame.levelnum = -atoi(slevel+1);
-				else
-					Netgame.levelnum = atoi(slevel);
-				
-// 				if ((Netgame.levelnum < Last_secret_level) || (Netgame.levelnum > Last_level) || (Netgame.levelnum == 0))
-// 				{
-// 					nm_messagebox(TXT_ERROR, 1, TXT_OK, TXT_LEVEL_OUT_RANGE );
-// 					sprintf(slevel, "1");
-// 					return 0;
-// 				}
+				Netgame.levelnum = menus[opt->level].value;
 			}
 			
 			if (citem == opt->maxnet)
@@ -4265,11 +4257,15 @@ int net_udp_game_param_handler( newmenu *menu, d_event *event, param_opt *opt )
 			break;
 			
 		case EVENT_NEWMENU_SELECTED:
+			// The counter is clamped to the mission's range and steps over zero,
+			// so this cannot normally trigger. Kept as a guard, but it no longer
+			// writes "1" back into the item's text - that is a string literal
+			// now the field is a counter rather than an input box.
 			if ((Netgame.levelnum < Last_secret_level) || (Netgame.levelnum > Last_level) || (Netgame.levelnum == 0))
 			{
-				char *slevel = menus[opt->level].text;
 				nm_messagebox(TXT_ERROR, 1, TXT_OK, TXT_LEVEL_OUT_RANGE );
-				sprintf(slevel, "1");
+				Netgame.levelnum = 1;
+				menus[opt->level].value = 1;
 				return 1;
 			}
 
@@ -4493,7 +4489,7 @@ int net_udp_setup_game()
 	strcpy(Netgame.mission_name, Current_mission_filename);
 	strcpy(Netgame.mission_title, Current_mission_longname);
 
-	sprintf( slevel, "1" ); Netgame.levelnum = 1;
+	Netgame.levelnum = 1;
 
 	choice = 0;
 	for (;;) {
@@ -4523,7 +4519,15 @@ int net_udp_setup_game()
 		m[optnum].type = NM_TYPE_TEXT; m[optnum].text = level_text; optnum++;
 
 		opt.level = optnum;
-		m[optnum].type = NM_TYPE_INPUT; m[optnum].text = slevel; m[optnum].text_len=4; optnum++;
+		// A counter, not a typed number: left and right adjust it, which a pad
+		// produces, and it cannot name a level the mission does not have.
+		// Secret levels are negative here, so the range starts below zero when
+		// the mission has any.
+		m[optnum].type = NM_TYPE_NUMBER; m[optnum].text = "Level";
+		m[optnum].value = Netgame.levelnum;
+		m[optnum].min_value = (Last_secret_level < 0) ? Last_secret_level : 1;
+		m[optnum].max_value = Last_level;
+		optnum++;
 		m[optnum].type = NM_TYPE_TEXT; m[optnum].text = TXT_OPTIONS; optnum++;
 
 		opt.mode = optnum;
