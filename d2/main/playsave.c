@@ -84,7 +84,10 @@ void read_observer_setting(int obs_mode, char *line, char *word);
 int new_player_config()
 {
 	InitWeaponOrdering (); //setup default weapon priorities
-	PlayerCfg.ControlType=0; // Assume keyboard
+	// A handheld has a pad and no keyboard, and the controls screen ignores
+	// joystick input entirely unless this is set - so leaving it off meant a
+	// new pilot could not use, or even configure, the only input device present.
+	PlayerCfg.ControlType=CONTROL_USING_JOYSTICK;
 	memcpy(PlayerCfg.KeySettings, DefaultKeySettings, sizeof(DefaultKeySettings));
 	memcpy(PlayerCfg.KeySettingsD2X, DefaultKeySettingsD2X, sizeof(DefaultKeySettingsD2X));
 	kc_set_controls();

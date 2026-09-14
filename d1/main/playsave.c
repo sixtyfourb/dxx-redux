@@ -69,7 +69,10 @@ int new_player_config()
 		saved_games[i].name[0] = 0;
 
 	InitWeaponOrdering (); //setup default weapon priorities
-	PlayerCfg.ControlType=0; // Assume keyboard
+	// A handheld has a pad and no keyboard, and the controls screen ignores
+	// joystick input entirely unless this is set - so leaving it off meant a
+	// new pilot could not use, or even configure, the only input device present.
+	PlayerCfg.ControlType=CONTROL_USING_JOYSTICK;
 	memcpy(PlayerCfg.KeySettings, DefaultKeySettings, sizeof(DefaultKeySettings));
 	memcpy(PlayerCfg.KeySettingsD1X, DefaultKeySettingsD1X, sizeof(DefaultKeySettingsD1X));
 	kc_set_controls();
