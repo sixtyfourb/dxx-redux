@@ -890,6 +890,18 @@ int newmenu_key_command(window *wind, d_event *event, newmenu *menu)
 	int changed = 0;
 	int rval = 1;
 
+	// A pad's confirm button arrives here as Enter, and Enter on a checkbox or
+	// a radio button used to mean "accept the menu" rather than "tick this" -
+	// so on a machine with no keyboard there was no way to tick anything, which
+	// among other things left the resolution unchangeable. Space still does it
+	// too; this only adds Enter, and only for the two item types where ticking
+	// is the obviously intended action. KEY_PADENTER is deliberately excluded -
+	// that is what the pad's Start button sends, and it has to mean accept even
+	// on a page made entirely of checkboxes.
+	if (k == KEY_ENTER && menu->citem > -1
+	    && (item->type == NM_TYPE_CHECK || item->type == NM_TYPE_RADIO))
+		k = KEY_SPACEBAR;
+
 	if (keyd_pressed[KEY_NUMLOCK])
 	{
 		switch( k )

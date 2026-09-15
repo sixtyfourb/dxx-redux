@@ -305,6 +305,15 @@ int joy_menu_key(int button)
 	if (SDL_Joysticks[0].n_buttons > 1 && button == SDL_Joysticks[0].button_map[1])
 		return KEY_ESC;
 
+	// Start accepts the screen outright. Confirm alone is not enough: on a page
+	// of checkboxes it ticks the one under the cursor and never leaves, which
+	// is a dead end on the netgame player screen. This comes through as
+	// KEY_PADENTER, which newmenu accepts on and which the check/radio remap
+	// leaves alone, so it means accept whatever the cursor is sitting on.
+	if (num_joysticks > 0 && SDL_Joysticks[0].n_buttons > JOY_BUTTON_START
+	    && button == SDL_Joysticks[0].button_map[JOY_BUTTON_START])
+		return KEY_PADENTER;
+
 	return 0;
 }
 
